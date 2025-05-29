@@ -1,10 +1,46 @@
+from django.db.models import DateTimeField
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .utils import COUNTRY_TO_CCY, get_models, get_recent_window, load_exchange_data
+
+from fuwarilog.ex_rates.models import ExchangeRate
+from .serializers import ExchangeRateSerializer
+from .utils import COUNTRY_TO_CCY, get_models, get_recent_window, load_exchange_data, CCY_TO_COUNTRY, get_exchange_rate
 from dateutil.relativedelta import relativedelta
 import numpy as np
 import pandas as pd
+from datetime import datetime
+
+# 3개월치 실시간 환율 데이터 조회
+class ExRateView(APIView):
+    def get(self, request):
+        country = request.query_params.get('country')
+        if country not in COUNTRY_TO_CCY:
+            return Response({'error':'지원되지 않는 국가'}, status=status.HTTP_400_BAD_REQUEST)
+        ccy = COUNTRY_TO_CCY[country]
+
+        base_date = datetime.now()
+        df = get_exchange_rate(ccy)
+
+        # baseDate = now, startDate 1개월 전
+        start_date = base_date - relativedelta(months=1)
+        df_period = df[(df['timestamp'] >= start_date) & (df['timestamp'] <= base_date)]
+
+        if df_period.empty:
+            return Response({'error': '해당 기간에 데이터가 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response({
+            'currency': ccy,
+            'country': country,
+            'start_date': str(start_date.date()),
+            'end_date': str(base_date.date()),
+            'list' : {
+                'timestamp': str(df_period.index[0]),
+                'deal_base_r': str(df_period['deal_base_r'].values[0]),
+            }
+        })
+
+
 
 class RatePredictView(APIView):
     def get(self, request):
@@ -23,7 +59,7 @@ class RatePredictView(APIView):
             return Response({'error':'충분한 데이터가 없습니다.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         # 3) 실제 환율 값 배열 & 정규화
-        rates = df_win['매매기준율'].values.reshape(-1,1)
+        rates = df_win['deal_bas_r'].values.reshape(-1,1)
         scaled = tgt_scaler.transform(rates).flatten()
 
         # 4) 7일치 예측
@@ -39,8 +75,17 @@ class RatePredictView(APIView):
         preds = tgt_scaler.inverse_transform(np.array(preds_scaled).reshape(-1,1)).flatten().tolist()
 
         # 6) 날짜 리스트 생성 (마지막 날짜 이후 7일)
-        last_date = pd.to_datetime(df_win['적용시작일'].iloc[-1])
+        last_date = pd.to_datetime(df_win['timestamp'].iloc[-1])
         dates = [(last_date + pd.Timedelta(days=i+1)).strftime('%Y-%m-%d') for i in range(7)]
+
+        # 7) 모델에 저장
+        for date, rate in zip(dates, preds):
+            ExchangeRate.objects.create(
+                cur_nm=country,
+                cur_unit=ccy,
+                timestamp=date,
+                deal_bas_r=rate
+            )
 
         return Response({
             'currency': ccy,

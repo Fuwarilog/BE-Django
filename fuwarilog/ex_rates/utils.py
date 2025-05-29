@@ -1,11 +1,15 @@
 import os
 import pandas as pd
 from django.conf import settings
-from keras.models import load_model
+from django.utils import connection
+from tensorflow.keras.models import load_model
 import joblib
 
 # 국가→통화코드
 COUNTRY_TO_CCY = {'한국':'KRW','중국':'CNY','일본':'JPY','미국':'USD'}
+
+# 통화코드->국가
+CCY_TO_COUNTRY = {'KRW':'한국', 'CNY':'중국', 'JPY':'일본', 'USD':'미국'}
 
 # 환율 값에 대한 증가/감소 예측 메서드
 def get_models(ccy):
@@ -14,10 +18,16 @@ def get_models(ccy):
     tgt_scaler = joblib.load(base / f'scaler_target_{ccy}.pkl')
     return lstm, tgt_scaler
 
+# exchange_rate model mysql에서 가져오기
+def get_exchange_rate(ccy):
+    df = pd.read_sql_table('exchange_rate', connection)
+    df = df[df['cur_unit'] == ccy].sort_values('date', ascending=True)
+    return df
+
 # 7일 환율 예측 메서드
 def get_recent_window(ccy, window_size=30):
-    df = pd.read_csv(settings.BASE_DIR / 'data' / 'data.csv', encoding='utf-8-sig', parse_dates=['적용시작일'])
-    df = df[df['통화코드']==ccy].sort_values('적용시작일')
+    df = pd.read_sql_table('exchange_rate', connection)
+    df = df[df['cur_unit']==ccy].sort_values('timestamp', ascending=True)
     return df.tail(window_size)
 
 # 3개월 기간 중 최고/최저 금액 반환 메서드

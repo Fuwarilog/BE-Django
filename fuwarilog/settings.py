@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -39,7 +40,6 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'fuwarilog.ex_rates',
     'rest_framework',
-
 ]
 
 MIDDLEWARE = [
@@ -76,10 +76,18 @@ WSGI_APPLICATION = 'fuwarilog.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+import pymysql
+pymysql.install_as_MySQLdb()
+
+# mysql 연결 설정
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'fuwarilog',
+        'USER' : 'root',
+        'PASSWORD' : '7878',
+        'HOST' : '127.0.0.1',
+        'PORT' : '3306',
     }
 }
 
