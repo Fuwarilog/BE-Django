@@ -1,5 +1,16 @@
 from django.db import models
 
+# 현재 환율 조회
+class ExchangeRate(models.Model):
+    cur_nm = models.CharField(max_length=10)
+    cur_unit = models.CharField(max_length=10)
+    timestamp = models.DateTimeField(auto_now=True)
+    deal_bas_r = models.FloatField()
+
+    class Meta:
+        db_table = "exchange_rate"
+
+
 # 익주 예측
 class CurrencyPrediction(models.Model):
     currency_code = models.CharField(max_length=10)
@@ -12,15 +23,6 @@ class CurrencyPrediction(models.Model):
         return f"{self.currency_code} - {self.predicted_rate}"
 
 
-# 현재 환율 조회
-class ExchangeRate(models.Model):
-    cur_nm = models.CharField(max_length=10)
-    cur_unit = models.CharField(max_length=10)
-    timestamp = models.DateTimeField(auto_now=True)
-    deal_bas_r = models.FloatField()
-
-    class Meta:
-        db_table = "exchange_rate"
 
 # 3개월 데이터 중에서 최대/최소 환율 조회
 class ExchangeStats(models.Model):

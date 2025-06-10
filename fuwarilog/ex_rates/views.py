@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from fuwarilog.ex_rates.models import ExchangeRate
+from .kafka_producer import send_prediction
 from .serializers import ExchangeRateSerializer
 from .utils import COUNTRY_TO_CCY, get_models, get_recent_window, load_exchange_data, CCY_TO_COUNTRY, get_exchange_rate
 from dateutil.relativedelta import relativedelta
@@ -17,27 +18,28 @@ class ExRateView(APIView):
         country = request.query_params.get('country')
         if country not in COUNTRY_TO_CCY:
             return Response({'error':'지원되지 않는 국가'}, status=status.HTTP_400_BAD_REQUEST)
+
         ccy = COUNTRY_TO_CCY[country]
-
         base_date = datetime.now()
-        df = get_exchange_rate(ccy)
 
-        # baseDate = now, startDate 1개월 전
-        start_date = base_date - relativedelta(months=1)
-        df_period = df[(df['timestamp'] >= start_date) & (df['timestamp'] <= base_date)]
+        exchange_rate_data = ExchangeRate.objects.filter(
+            cur_unit=ccy, timestamp__gte=base_date - relativedelta(months=1), timestamp__lte=base_date
+        ).order_by('timestamp')
 
-        if df_period.empty:
-            return Response({'error': '해당 기간에 데이터가 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
+        if not exchange_rate_data:
+            return Response({'error' : '해당 기간에 데이터가 존재하지 않습니다.'}, status=status.HTTP_404_NOT_FOUND)
 
         return Response({
             'currency': ccy,
             'country': country,
-            'start_date': str(start_date.date()),
-            'end_date': str(base_date.date()),
-            'list' : {
-                'timestamp': str(df_period.index[0]),
-                'deal_base_r': str(df_period['deal_base_r'].values[0]),
-            }
+            'start_date': str(base_date - relativedelta(months=1)),
+            'end_date': str(base_date),
+            'list' : [
+                {
+                    'timestamp': str(rate.timestamp),
+                    'deal_base_r': str(rate.deal_base_r)
+                } for rate in exchange_rate_data
+            ]
         })
 
 
@@ -79,13 +81,19 @@ class RatePredictView(APIView):
         dates = [(last_date + pd.Timedelta(days=i+1)).strftime('%Y-%m-%d') for i in range(7)]
 
         # 7) 모델에 저장
-        for date, rate in zip(dates, preds):
-            ExchangeRate.objects.create(
-                cur_nm=country,
-                cur_unit=ccy,
-                timestamp=date,
-                deal_bas_r=rate
-            )
+        # for date, rate in zip(dates, preds):
+        #     ExchangeRate.objects.create(
+        #         cur_nm=country,
+        #         cur_unit=ccy,
+        #         timestamp=date,
+        #         deal_bas_r=rate
+        #     )
+
+        send_prediction('prediction_weekly', {
+            'cur_unit': ccy,
+            'predicted_value': preds,
+            'timestamp': (last_date + datetime.timedelta(weeks=1)).strftime('%Y-%m-%d'),
+        })
 
         return Response({
             'currency': ccy,
