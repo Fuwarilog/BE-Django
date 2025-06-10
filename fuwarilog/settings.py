@@ -120,7 +120,7 @@ TIME_ZONE = 'UTC'
 
 USE_I18N = True
 
-USE_TZ = True
+USE_TZ = False # Django 내부적으로 시간대를 인식하는 날자 및 시간 가용 (False면 Local Time을 사용)
 
 
 # Static files (CSS, JavaScript, Images)
