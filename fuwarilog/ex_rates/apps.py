@@ -1,4 +1,5 @@
 import os
+import threading
 from django.apps import AppConfig
 
 class FuwarilogConfig(AppConfig):
@@ -9,4 +10,4 @@ class FuwarilogConfig(AppConfig):
         if os.environ.get('RUN_MAIN', None) != 'true':
             return
         from .kafka_consumer import start_kafka_consumer
-        start_kafka_consumer()
+        threading.Thread(target=start_kafka_consumer, daemon=True).start()
