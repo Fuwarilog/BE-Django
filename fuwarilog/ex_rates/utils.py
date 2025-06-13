@@ -1,4 +1,3 @@
-import os
 import pandas as pd
 from django.conf import settings
 from django.utils import connection
@@ -17,12 +16,6 @@ def get_models(ccy):
     lstm = load_model(str(base / f'lstm_{ccy}.h5'), compile=False)
     tgt_scaler = joblib.load(base / f'scaler_target_{ccy}.pkl')
     return lstm, tgt_scaler
-
-# exchange_rate model mysql에서 가져오기
-def get_exchange_rate(ccy):
-    df = pd.read_sql_table('exchange_rate', connection)
-    df = df[df['cur_unit'] == ccy].sort_values('date', ascending=True)
-    return df
 
 # 7일 환율 예측 메서드
 def get_recent_window(ccy, window_size=30):

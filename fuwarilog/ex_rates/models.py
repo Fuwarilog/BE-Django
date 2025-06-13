@@ -1,14 +1,5 @@
 from django.db import models
 
-# 현재 환율 조회
-class ExchangeRate(models.Model):
-    cur_nm = models.CharField(max_length=10)
-    cur_unit = models.CharField(max_length=10)
-    timestamp = models.DateTimeField(auto_now=True)
-    deal_bas_r = models.FloatField()
-
-    class Meta:
-        db_table = "exchange_rate"
 
 
 # 익주 예측

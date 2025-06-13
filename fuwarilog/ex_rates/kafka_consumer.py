@@ -1,11 +1,10 @@
 import json
+from .exchange_rate_store import add_exchange_rate
+from datetime import datetime, timedelta
 import threading
 from kafka import KafkaConsumer
 from datetime import datetime
-from .models import ExchangeRate
 import logging
-
-from .utils import CCY_TO_COUNTRY
 
 # Django 환경 설정
 # os.environ.setdefault("DJANGO_SETTINGS_MODULE", "exchange_project.settings")
@@ -22,6 +21,7 @@ def start_kafka_consumer():
             enable_auto_commit=True,
             group_id='fuwarilog-group',
             value_deserializer=lambda x: json.loads(x.decode('utf-8')) if x else {},
+            consumer_timeout_ms=1000
         )
 
         logger.info("[KafkaConsumer] Listening for prediction messages...")
@@ -29,40 +29,53 @@ def start_kafka_consumer():
         for message in consumer:
             try:
                 data = message.value
+                logger.info(f"[KafkaConsumer] Received message: {message.value}")
+
+                if not isinstance(data, dict):
+                    logger.warning(f"[KafkaConsumer] Received message: {data}")
+                    continue
+
                 payload = data.get('payload', {})
+                op = payload.get('op')
                 after = payload.get('after')
+
+                if op == 'd' or after is None:
+                    logger.info(f"[KafkaConsumer] Skipping delete or null-after message. op: {op}")
+                    continue
 
                 if not after:
                     logger.warning("[KafkaConsumer] No after received!")
+                    consumer.commit()
                     continue
 
-                cur_nm = data.get('cur_nm')
-                cur_unit = data.get('cur_unit')
-                deal_bas_r = float(data.get('deal_bas_r', 0))
-                timestamp = data.get('timestamp')
+                cur_nm = after.get('cur_nm')
+                cur_unit = after.get('cur_unit')
+                deal_bas_r = after.get('deal_bas_r')
+                timestamp = after.get('timestamp')
+
+                try:
+                    deal_bas_r = float(deal_bas_r)
+                except (ValueError, TypeError):
+                    logger.error(f"[KafkaConsumer] deal_bas_r : {deal_bas_r}")
+                    continue
 
                 if timestamp:
-                    timestamp = datetime.strptime(timestamp, "%Y-%m-%d").date()
+                    timestamp = (datetime(1970, 1, 1) + timedelta(days=timestamp)).date()
                 else:
                     timestamp = datetime.now().date()
 
-                existing_data = ExchangeRate.objects.filter(
-                    cur_unit=cur_unit, timestamp=timestamp
-                ).exists()
+                if cur_unit and deal_bas_r:
+                    add_exchange_rate(cur_unit, timestamp, float(deal_bas_r))
 
-                if existing_data:
-                    logger.info(f"[KafkaConsumer] Data for {cur_unit} on {timestamp} already exists.")
-                    continue
-
-                ExchangeRate.objects.create(
-                    cur_nm = cur_nm,
-                    cur_unit = cur_unit,
-                    deal_bas_r = deal_bas_r,
-                    timestamp = timestamp
-                )
                 logger.info(f"[KafkaConsumer] Saved prediction for {cur_unit} on {timestamp} with rate {deal_bas_r} on {deal_bas_r}")
 
             except Exception as e:
                 logger.error(f"[KafkaConsumer][ERROR] {e}")
 
-    threading.Thread(target=consume, daemon=True).start()
+    consumer_thread = threading.Thread(
+        target=consume,
+        daemon=True,
+        name="start_kafka_consumer")
+    consumer_thread.start()
+    logger.info('[KafkaConsumer] Consumer thread started.')
+    return consumer_thread
