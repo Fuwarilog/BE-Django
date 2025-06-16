@@ -1,10 +1,12 @@
 import json
 from .exchange_rate_store import add_exchange_rate
 from datetime import datetime, timedelta
-import threading
 from kafka import KafkaConsumer
 from datetime import datetime
 import logging
+import psutil
+import threading
+import time
 
 # Django 환경 설정
 # os.environ.setdefault("DJANGO_SETTINGS_MODULE", "exchange_project.settings")
@@ -17,9 +19,9 @@ def start_kafka_consumer():
         consumer = KafkaConsumer(
             'mysqlserver1.fuwarilog.exchange_rate',
             bootstrap_servers='localhost:9092',
-            auto_offset_reset='latest',
+            auto_offset_reset='earliest',
             enable_auto_commit=True,
-            group_id='fuwarilog-group',
+            group_id='fuwarilog-group-consumer',
             value_deserializer=lambda x: json.loads(x.decode('utf-8')) if x else {},
             consumer_timeout_ms=1000
         )
@@ -78,4 +80,13 @@ def start_kafka_consumer():
         name="start_kafka_consumer")
     consumer_thread.start()
     logger.info('[KafkaConsumer] Consumer thread started.')
+
+    # p = psutil.Process()
+    #
+    # while consumer_thread.is_alive():
+    #     cpu_usage = p.cpu_percent()
+    #     memory_usage = p.memory_info().rss
+    #     print(f"CPU Usage: {cpu_usage}%, Memory Usage: {memory_usage}%")
+    #     time.sleep(1)
+
     return consumer_thread

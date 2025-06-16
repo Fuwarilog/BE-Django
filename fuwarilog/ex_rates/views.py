@@ -2,9 +2,9 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 
-from .exchange_rate_store import get_exchange_rates, get_exchange_rates_max_min
+from .exchange_rate_store import get_exchange_rates
 from .kafka_producer import send_prediction
-from .utils import COUNTRY_TO_CCY, get_models, get_recent_window, load_exchange_data, CCY_TO_COUNTRY
+from .utils import COUNTRY_TO_CCY, get_models
 from dateutil.relativedelta import relativedelta
 import numpy as np
 import pandas as pd
@@ -24,7 +24,6 @@ class ExRateView(APIView):
             return Response({'error':'지원되지 않는 국가'}, status=status.HTTP_400_BAD_REQUEST)
 
         ccy = COUNTRY_TO_CCY[country]
-        logger.info(ccy)
         end_date = datetime.now().date()
         start_date = end_date - relativedelta(months=1)
 
@@ -153,6 +152,7 @@ class RateDirectionView(APIView):
             return Response({'error': '유효하지 않은 날짜 형식입니다. YYYY-MM-DD로 입력하세요.'}, status=status.HTTP_400_BAD_REQUEST)
 
         ccy = COUNTRY_TO_CCY[country]
+        logger.info(ccy)
         model, scaler = get_models(ccy)
 
         all_data = get_exchange_rates(ccy, datetime.min.date(), datetime.now().date())
@@ -181,7 +181,7 @@ class RateDirectionView(APIView):
             'predicted_rate': pred,
             'today_rate': today_rate_val,
             'direction': direction,
-            'timestamp': (datetime.now().date() + timedelta(days=1)).strftime('%Y-%m-%d')
+            'timestamp': (base_date + timedelta(days=1)).strftime('%Y-%m-%d')
         })
 
         return Response({
@@ -189,4 +189,66 @@ class RateDirectionView(APIView):
             'today_rate': today_rate_val,
             'predicted_rate': round(pred, 3),
             'direction': direction
+        })
+
+# 사용자 여행일정으로부터 일주일 전 환율 예측 기능
+class TravelRateForecasView(APIView):
+    def post(self, request):
+        country = request.data.get('country')
+        start_date = request.data.get('start_date')
+
+        if not (country and start_date):
+            return Response({'error': 'country, startDate는 필수로 입력해야합니다.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if country not in COUNTRY_TO_CCY:
+            return Response({'error': '지원되지 않는 국가입니다.'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+        try:
+            start_date = pd.to_datetime(start_date).date()
+        except:
+            return Response({'error': '날짜 형식이 유효하지 않습니다. YYYY-MM-DD 형식으로 입력하세요.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        ccy = COUNTRY_TO_CCY[country]
+        model, scaler = get_models(ccy)
+
+        all_data = get_exchange_rates(ccy, datetime.min.date(), datetime.now().date())
+        if len(all_data) < 30:
+            return Response({'error': '예측에 필요한 데이터가 부족합니다.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        df = pd.DataFrame(all_data)
+        df = df.sort_values(by='timestamp')
+        df_win = df.tail(30)
+
+        rates = df_win['deal_bas_r'].values.reshape(-1, 1)
+        scaled = scaler.transform(rates).flatten().tolist()
+
+        num_days = 7
+        preds_scaled = []
+        window = list(scaled)
+
+        for _ in range(num_days):
+            x_input = np.array(window[-30:]).reshape(-1, 30, 1)
+            yhat = model.predict(x_input, verbose=0)[0][0]
+            preds_scaled.append(yhat)
+            window.append(yhat)
+
+        preds = scaler.inverse_transform(np.array(preds_scaled).reshape(-1, 1))
+
+        predict_dates = [(start_date - timedelta(days=(7-1))).strftime('%Y-%m-%d')]
+
+        for i in range(7):
+            send_prediction('prediction_trip_weekly', {
+                'cur_nm': country,
+                'cur_unit': ccy,
+                'predicted_value': preds[i],
+                'timestamp': predict_dates[i],
+            })
+
+        return Response({
+            'country': country,
+            'currency': ccy,
+            'predict_dates': predict_dates,
+            'predicted_values': [round(p, 3) for p in preds]
+
         })
