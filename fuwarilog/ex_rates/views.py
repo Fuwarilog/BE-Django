@@ -246,7 +246,6 @@ class TravelRateForecasView(APIView):
             })
 
         return Response({
-            'country': country,
             'currency': ccy,
             'predict_dates': predict_dates,
             'predicted_values': [round(p, 3) for p in preds]
