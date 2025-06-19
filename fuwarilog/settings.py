@@ -23,6 +23,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-a*=*sig1m6m^!w^9la#f3+7*3#=6&8lw#2o)dren=@f!($!^n*'
 
+# JWT key
+JWT_KEY = '9dcdc9943976099ac108d3725c67126d8b12ac11ccebd9887cebae3cc1484871893c0d327e5038ec1705fae0d4bfcba7297e8e379c8f4ba89cd0f0547cb7b217'
+
+# CORS설정
+CORS_ALLOW_CREDENTIALS = True
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
@@ -75,9 +81,6 @@ WSGI_APPLICATION = 'fuwarilog.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-
-import pymysql
-pymysql.install_as_MySQLdb()
 
 # mysql 연결 설정
 DATABASES = {
