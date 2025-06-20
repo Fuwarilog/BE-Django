@@ -1,4 +1,5 @@
 import jwt
+from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 from fuwarilog.settings import JWT_KEY
@@ -13,9 +14,9 @@ class JWTAuthentication(BaseAuthentication):
 
         try:
             payload = jwt.decode(token, JWT_KEY, algorithms=['HS256'])
-        except jwt.ExpiredSignatureError:
+        except ExpiredSignatureError:
             raise AuthenticationFailed('Access Token이 만료되었습니다.')
-        except jwt.InvalidTokenError:
+        except InvalidTokenError:
             raise AuthenticationFailed('Access Token이 유효하지 않습니다.')
 
         email = payload.get("sub")
@@ -23,7 +24,7 @@ class JWTAuthentication(BaseAuthentication):
             raise AuthenticationFailed('Access Token이 잘못되었습니다.')
 
         try:
-            user = User.objects.get(email=email)
+            user = User.objects.get(email=payload["sub"])
         except User.DoesNotExist:
             raise AuthenticationFailed('사용자가 존재하지 않습니다.')
 

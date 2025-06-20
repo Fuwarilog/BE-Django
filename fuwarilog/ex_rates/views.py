@@ -20,11 +20,11 @@ logger = logging.getLogger(__name__)
 
 # 3개월/1개월치 실시간 환율 데이터 조회
 class ExRateView(APIView):
-    authentication_classes = [JWTAuthentication, SessionAuthentication]
-    permission_classes = [IsAuthenticated]
+    # authentication_classes = [JWTAuthentication, SessionAuthentication]
+    # permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        #user = request.user
+        # user = request.user
         country = request.query_params.get('country')
         date = request.query_params.get('date') # 1w: week, 1m: month, 3m: 3month
 
@@ -33,6 +33,7 @@ class ExRateView(APIView):
 
         ccy = COUNTRY_TO_CCY[country]
         end_date = datetime.now().date()
+        start_date = end_date - relativedelta(months=1)
 
         if date == "1w":
             start_date = end_date - relativedelta(days=7)
@@ -201,19 +202,20 @@ class RateDirectionView(APIView):
 
 # 사용자 여행 일정의 일주일 전 환율 예측 기능
 class TravelRateForecasView(APIView):
-    authentication_classes = [JWTAuthentication, SessionAuthentication]
-    permission_classes = [IsAuthenticated]
+    # authentication_classes = [JWTAuthentication, SessionAuthentication]
+    # permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        user = request.user
-        user_id = user.user_id # 쿠키의 accessToken을 통해 mysql에 저장되어있는 userId와 동일한지 확인하고 user_id 추출
-        trip_id = request.query_params.get('tripId') # localhost:3000에서 전달한 값
+        # user = request.user
+        # user_id = user.user_id # 쿠키의 accessToken을 통해 mysql에 저장되어있는 userId와 동일한지 확인하고 user_id 추출
+        user_id = int(request.query_params.get('user_id'))
+        trip_id = int(request.query_params.get('trip_id')) # localhost:3000에서 전달한 값
 
         country = get_trip_country(user_id, trip_id)
         start_date = get_trip_date(user_id, trip_id)
 
         if not (country and start_date):
-            return Response({'error': 'country, startDate는 필수로 입력해야합니다.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': f'country, startDate는 필수로 입력해야합니다.{country},{start_date}'}, status=status.HTTP_400_BAD_REQUEST)
 
         if country not in COUNTRY_TO_CCY:
             return Response({'error': '지원되지 않는 국가입니다.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -230,8 +232,12 @@ class TravelRateForecasView(APIView):
         if len(all_data) < 30:
             return Response({'error': '예측에 필요한 데이터가 부족합니다.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        df = pd.DataFrame(all_data)
-        df = df.sort_values(by='timestamp')
+        serializer = ExchangeRateSerializer(all_data, many=True)
+
+        df = pd.DataFrame(serializer.data)
+        if df.empty or 'deal_bas_r' not in df.columns:
+            return Response({'error' : '환율 데이터 형식 오류'}, status=status.HTTP_400_BAD_REQUEST)
+
         df_win = df.tail(30)
 
         rates = df_win['deal_bas_r'].values.reshape(-1, 1)
@@ -247,18 +253,21 @@ class TravelRateForecasView(APIView):
             preds_scaled.append(yhat)
             window.append(yhat)
 
-        preds = scaler.inverse_transform(np.array(preds_scaled).reshape(-1, 1))
+        preds = scaler.inverse_transform(np.array(preds_scaled).reshape(-1, 1)).flatten()
 
-        predict_dates = [(start_date - timedelta(days=(7-1))).strftime('%Y-%m-%d')]
+        predict_dates = [
+            (start_date - timedelta(days=(7-i))).strftime('%Y-%m-%d')
+            for i in range(7)
+        ]
 
         for i in range(7):
-            send_prediction('prediction_trip_weekly', {
+            send_prediction('prediction_trip-1', {
                 'user_id': user_id,
                 'trip_id': trip_id,
                 'cur_nm': country,
                 'cur_unit': ccy,
-                'predicted_value': preds[i],
-                'predict_dates': predict_dates[i],
+                'predicted_value': float(preds[i]),
+                'predict_date': predict_dates[i],
             })
 
         return Response({
@@ -266,6 +275,6 @@ class TravelRateForecasView(APIView):
             'trip_id': trip_id,
             'cur_nm': country,
             'cur_unit': ccy,
-            'predicted_values': [round(p, 3) for p in preds],
+            'predicted_values': [round(p, 3) for p in preds] ,
             'predict_dates': predict_dates,
         })

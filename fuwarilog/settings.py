@@ -76,6 +76,16 @@ TEMPLATES = [
     },
 ]
 
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'fuwarilog.authentication.JWTAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+}
+
 WSGI_APPLICATION = 'fuwarilog.wsgi.application'
 
 
@@ -94,6 +104,7 @@ DATABASES = {
     }
 }
 
+AUTH_USER_MODEL = 'ex_rates.User'
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators

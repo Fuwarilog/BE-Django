@@ -15,13 +15,19 @@ class FuwarilogConfig(AppConfig):
             return
         def delayed_kafka_start():
             try:
-                from .kafka_consumer import start_kafka_consumer
-                consumer_thread = start_kafka_consumer()
+                from .kafka_consumer import trip_consumer #, exchange_consumer
+                consumer_thread1 = trip_consumer()
+                # consumer_thread2 = exchange_consumer()
 
-                if consumer_thread and consumer_thread.is_alive():
-                    logger.info(f"[Django] Kafka consumer thread {consumer_thread.name}")
+                if consumer_thread1 and consumer_thread1.is_alive():
+                    logger.info(f"[Django] Trip consumer thread {consumer_thread1.name}")
                 else:
-                    logger.error("[Django] Kafka consumer thread not found.")
+                    logger.error("[Django] Trip consumer thread not found.")
+
+                # if consumer_thread2 and consumer_thread2.is_alive():
+                #     logger.info(f"[Django] Exchange consumer thread {consumer_thread2.name}")
+                # else:
+                #     logger.error("[Django] Exchange consumer thread not found.")
 
             except Exception as e:
                 logger.error(f"[Django] failed to start Kafka consumer thread {e}")
