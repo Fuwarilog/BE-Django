@@ -132,13 +132,6 @@ class RatePredictView(APIView):
         last_date = pd.to_datetime(df_win['timestamp'].iloc[-1])
         dates = [(last_date + timedelta(days=i+1)).strftime('%Y-%m-%d') for i in range(7)]
 
-        for i in range(7):
-            send_prediction('prediction_weekly', {
-                'cur_unit': ccy,
-                'predicted_value': preds[i],
-                'timestamp': dates[i],
-            })
-
         return Response({
             'currency': ccy,
             'dates': dates,
@@ -183,15 +176,6 @@ class RateDirectionView(APIView):
             '하락' if pred < today_rate_val else
             '변동 없음'
         )
-
-        send_prediction('prediction_daily', {
-            'cur_nm': country,
-            'cur_unit': ccy,
-            'predicted_rate': pred,
-            'today_rate': today_rate_val,
-            'direction': direction,
-            'predicted_date': (base_date + timedelta(days=1)).strftime('%Y-%m-%d')
-        })
 
         return Response({
             'currency': ccy,
