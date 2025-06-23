@@ -25,13 +25,13 @@ logger = logging.getLogger(__name__)
 def trip_consumer():
     def consume():
         consumer = KafkaConsumer(
-            'triprequest',
+            'source-trip',
             bootstrap_servers='localhost:9092',
-            auto_offset_reset='earliest',
+            auto_offset_reset='latest', # 가장 최근에 읽은 데이터 이후의 것을 소비
             enable_auto_commit=True,
-            group_id='fuwarilog-trip-consumer-3',
+            group_id='fuwarilog-trip-consumer',
             value_deserializer=lambda x: json.loads(x.decode('utf-8')) if x else {},
-            consumer_timeout_ms=3000
+            consumer_timeout_ms=1000000 # 시간 최대한 길게 설정
         )
 
         logger.info("[KafkaConsumer][Trip] Listening for trip data...")
