@@ -9,25 +9,46 @@ https://docs.djangoproject.com/en/5.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
-
+import os
 from pathlib import Path
-
+import environ
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+env = environ.Env(DEBUG=(bool, False))
+environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-a*=*sig1m6m^!w^9la#f3+7*3#=6&8lw#2o)dren=@f!($!^n*'
+SECRET_KEY = env('SECRET_KEY')
 
 # JWT key
-JWT_KEY = '9dcdc9943976099ac108d3725c67126d8b12ac11ccebd9887cebae3cc1484871893c0d327e5038ec1705fae0d4bfcba7297e8e379c8f4ba89cd0f0547cb7b217'
+JWT_KEY = env('JWT_KEY')
 
 # CORS설정
 CORS_ALLOW_CREDENTIALS = True
+
+CORS_ORIGIN_WHITELIST = (
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8083",
+    "http://127.0.0.1:8083",
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+    "http://localhost:9092"
+    "http://127.0.0.1:9092"
+)
+
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'POST',
+    'PUT',
+]
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -46,9 +67,11 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'fuwarilog.ex_rates',
     'rest_framework',
+    'corsheaders',
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -96,11 +119,11 @@ WSGI_APPLICATION = 'fuwarilog.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'fuwarilog',
-        'USER' : 'root',
-        'PASSWORD' : '7878',
-        'HOST' : '127.0.0.1',
-        'PORT' : '3306',
+        'NAME': env('DB_NAME'),
+        'USER' : env('DB_USER'),
+        'PASSWORD' : env('DB_PASSWORD'),
+        'HOST' : env('DB_HOST'),
+        'PORT' : env('DB_PORT'),
     }
 }
 
