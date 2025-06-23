@@ -20,11 +20,11 @@ logger = logging.getLogger(__name__)
 
 # 3개월/1개월치 실시간 환율 데이터 조회
 class ExRateView(APIView):
-    # authentication_classes = [JWTAuthentication, SessionAuthentication]
-    # permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication, SessionAuthentication]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # user = request.user
+        user = request.user
         country = request.query_params.get('country')
         date = request.query_params.get('date') # 1w: week, 1m: month, 3m: 3month
 
@@ -53,6 +53,9 @@ class ExRateView(APIView):
 
 # 1개월 동안의 최고/최저 환율 조회
 class ExchangeStatView(APIView):
+    authentication_classes = [JWTAuthentication, SessionAuthentication]
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
         country = request.query_params.get('country')
         date_str = request.query_params.get('date')
@@ -94,6 +97,9 @@ class ExchangeStatView(APIView):
 
 # 익주 예측(기본-mysql 조회)
 class RatePredictView(APIView):
+    authentication_classes = [JWTAuthentication, SessionAuthentication]
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
         country = request.query_params.get('country')
         if country not in COUNTRY_TO_CCY:
@@ -108,7 +114,9 @@ class RatePredictView(APIView):
         if len(all_data) < 30:
             return Response({'error': '충분한 데이터가 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
 
-        df = pd.DataFrame(all_data)
+        serializer = ExchangeRateSerializer(all_data, many=True)
+
+        df = pd.DataFrame(serializer.data)
         df = df.sort_values(by='timestamp')
         df_win = df.tail(30)
 
@@ -141,6 +149,9 @@ class RatePredictView(APIView):
 
 # 익일 예측(기본-mysql에서 조회)
 class RateDirectionView(APIView):
+    authentication_classes = [JWTAuthentication, SessionAuthentication]
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
         country = request.query_params.get('country')
         today = request.query_params.get('today')
@@ -161,11 +172,14 @@ class RateDirectionView(APIView):
         if len(all_data) < 30:
             return Response({'error': '예측에 필요한 데이터가 부족합니다.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        df = pd.DataFrame(all_data).sort_values(by='timestamp').tail(30)
+        serializer = ExchangeRateSerializer(all_data, many=True)
+
+        df = pd.DataFrame(serializer.data).sort_values(by='timestamp').tail(30)
         rates = df['deal_bas_r'].values.reshape(-1, 1)
         scaled = scaler.transform(rates).reshape(1, 30, 1)
 
-        today_rate = df[(df['timestamp'] == base_date)]
+        df['timestamp'] = pd.to_datetime(df['timestamp']).dt.date
+        today_rate = df[df['timestamp'] == base_date]
         today_rate_val = float(today_rate.iloc[0]['deal_bas_r'])
 
         pred_scaled = model.predict(scaled, verbose=0)
